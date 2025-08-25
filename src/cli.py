@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import argparse
-import subprocess
 import sys
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
 import yaml
+import runpy
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -145,12 +145,21 @@ def run_python(script: str, extra_args: list[str]) -> int:
     if not script_path.exists() or not script_path.is_file():
         print(f"Unknown or missing script: {script}", file=sys.stderr)
         return 2
-    cmd = [sys.executable, str(script_path), *extra_args]
+    # Execute the target script in-process to avoid spawning subprocesses.
+    # Simulate command-line args for the script's argparse.
+    old_argv = sys.argv
     try:
-        subprocess.run(cmd, check=True, shell=False)
+        sys.argv = [str(script_path), *extra_args]
+        runpy.run_path(str(script_path), run_name="__main__")
         return 0
-    except subprocess.CalledProcessError as e:
-        return e.returncode
+    except SystemExit as e:
+        # Propagate script's intended exit code without killing the parent process
+        try:
+            return int(e.code) if e.code is not None else 0
+        except Exception:
+            return 1
+    finally:
+        sys.argv = old_argv
 
 
 def main() -> int:
