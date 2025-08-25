@@ -43,6 +43,7 @@ from itertools import product
 from typing import Optional
 from src.utils import ensure_timestamped_dir
 from src.plotting import plot_auc_curves
+from src.utils import random_sample_grid, cartesian_product
 
 
 @dataclass
@@ -334,6 +335,7 @@ def parse_args() -> Config:
     p.add_argument("--overfit-learning-rate", type=float, default=0.2)
 
     p.add_argument("--early-stopping-rounds", type=int, default=30)
+    p.add_argument("--random-search", type=int, default=0, help="Sample this many random combos from the grid (0 = full grid)")
 
     p.add_argument("--output-dir", type=Path, default=Path("runs"))
 
@@ -351,6 +353,7 @@ def parse_args() -> Config:
         overfit_learning_rate=a.overfit_learning_rate,
         tree_method="hist",
         early_stopping_rounds=a.early_stopping_rounds,
+        # use random_search as a count; 0 means full grid
         output_dir=a.output_dir,
     )
 
@@ -376,7 +379,80 @@ def main() -> None:
     train_overfit(cfg, X_train, y_train, X_valid, y_valid, out_dir)
 
     # 2) Tuning with early stopping
-    results, best = grid_search(cfg, X_train, y_train, X_valid, y_valid)
+    # Optionally sample grid
+    grids = {
+        "n_estimators": cfg.tune_n_estimators,
+        "max_depth": cfg.tune_max_depth,
+        "learning_rate": cfg.tune_learning_rate,
+        "min_child_weight": cfg.tune_min_child_weight,
+        "subsample": cfg.tune_subsample,
+        "colsample_bytree": cfg.tune_colsample_bytree,
+        "reg_lambda": cfg.tune_reg_lambda,
+    }
+    from random import Random
+    combos = (
+        random_sample_grid(grids, cfg.random_search, rng=Random(cfg.random_state))
+        if getattr(cfg, "random_search", 0)
+        else cartesian_product(grids)
+    )
+
+    # Run search manually over precomputed combos using existing training path
+    results: List[Result] = []
+    best: Result | None = None
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+    dvalid = xgb.DMatrix(X_valid, label=y_valid)
+    base_params = {
+        "objective": "binary:logistic",
+        "eval_metric": "auc",
+        "tree_method": cfg.tree_method,
+        "verbosity": 0,
+    }
+    for values in combos:
+        params = {
+            **base_params,
+            "max_depth": values["max_depth"],
+            "eta": values["learning_rate"],
+            "min_child_weight": values["min_child_weight"],
+            "subsample": values["subsample"],
+            "colsample_bytree": values["colsample_bytree"],
+            "lambda": values["reg_lambda"],
+        }
+        evals_result: Dict[str, Dict[str, List[float]]] = {}
+        booster = xgb.train(
+            params,
+            dtrain,
+            num_boost_round=values["n_estimators"],
+            evals=[(dtrain, "train"), (dvalid, "valid")],
+            evals_result=evals_result,
+            callbacks=[EarlyStopping(rounds=cfg.early_stopping_rounds, save_best=True, data_name="valid", metric_name="auc")],
+            verbose_eval=False,
+        )
+        train_auc_series = evals_result.get("train", {}).get("auc", [])
+        valid_auc_series = evals_result.get("valid", {}).get("auc", [])
+        if not valid_auc_series:
+            continue
+        best_iter = get_best_iter(booster, evals_result)
+        res = Result(
+            params={
+                "n_estimators": values["n_estimators"],
+                "max_depth": values["max_depth"],
+                "learning_rate": values["learning_rate"],
+                "min_child_weight": values["min_child_weight"],
+                "subsample": values["subsample"],
+                "colsample_bytree": values["colsample_bytree"],
+                "reg_lambda": values["reg_lambda"],
+            },
+            best_iteration=best_iter,
+            train_auc=float(train_auc_series[best_iter]) if train_auc_series else float("nan"),
+            valid_auc=float(valid_auc_series[best_iter]),
+        )
+        results.append(res)
+        if best is None or res.valid_auc > best.valid_auc:
+            best = res
+
+    if best is None:
+        raise ValueError("No valid model found in tuning search.")
+
     write_results_csv(results, out_dir / "tuning_results.csv")
 
     # 3) Train best config again to export curves

@@ -109,6 +109,20 @@ uv run python -m src.cli classify --n-samples 4000 --max-depth 4 --n-estimators 
 uv run python -m src.cli explain --n-samples 4000 --top-k 6
 # Tuning
 uv run python -m src.cli tune
+# Advanced topics
+uv run python -m src.cli advanced --n-samples 4000 --pos-weight 3.0 --use-gpu false
+```
+
+Makefile shortcuts:
+
+```bash
+make sync
+make intuition
+make classify
+make explain
+make tune
+make advanced
+make clean-runs
 ```
 
 Outputs are written under `runs/<timestamp>/<demo>/`.

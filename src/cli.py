@@ -81,6 +81,23 @@ COMMANDS: List[Dict[str, Any]] = [
             ("--class-sep", float, 1.0),
             ("--random-state", int, 42),
             ("--early-stopping-rounds", int, 30),
+            ("--random-search", int, 0),
+        ],
+    },
+    {
+        "name": "advanced",
+        "script": "05_xgb_advanced_topics.py",
+        "help": "Run advanced topics demo (missing, imbalance, monotonic, optional GPU)",
+        "args": [
+            ("--n-samples", int, 5000),
+            ("--n-features", int, 10),
+            ("--n-informative", int, 5),
+            ("--imbalance-ratio", float, 0.1),
+            ("--missing-rate", float, 0.05),
+            ("--pos-weight", float, 1.0),
+            ("--monotone", int, 1),
+            ("--use-gpu", str, "false"),
+            ("--random-state", int, 42),
         ],
     },
 ]
