@@ -47,7 +47,7 @@ def main() -> None:
         a.out_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         print(f"Error creating output directory {a.out_dir}: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
 
     paths = [
         save_titanic(a.out_dir),
