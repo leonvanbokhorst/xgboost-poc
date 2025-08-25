@@ -57,7 +57,7 @@ def main() -> None:
         a.out_dir.mkdir(parents=True, exist_ok=True)
     except Exception as e:
         print(f"Error creating output directory {a.out_dir}: {e}")
-        raise SystemExit(1)
+        raise SystemExit(1) from e
     paths = [
         make_classification_csv(a.out_dir, 3000, 12, 6, 1.2, a.seed),
         make_regression_csv(a.out_dir, 2000, 10, 10.0, a.seed),
