@@ -13,17 +13,18 @@ Outputs:
 Usage examples:
 - uv run python scripts/02_xgb_basic_classification.py
 - uv run python scripts/02_xgb_basic_classification.py --n-samples 5000 --max-depth 4 --n-estimators 400
-
-May your AUC rise like the twin suns of Tatooine.
 """
 
 from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
 from typing import Tuple
+
+import sys
+from pathlib import Path as _Path
+sys.path.append(str(_Path(__file__).resolve().parents[1]))
 
 import matplotlib
 
@@ -43,6 +44,9 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 
 from xgboost import XGBClassifier
+
+from src.utils import ensure_timestamped_dir
+from src.data import make_synthetic_classification
 
 
 @dataclass
@@ -66,26 +70,18 @@ class Config:
 
 
 def ensure_output_dir(root: Path) -> Path:
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    path = root / timestamp / "basic_classification"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+    return ensure_timestamped_dir(root, "basic_classification")
 
 
 def make_data(cfg: Config) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    X, y = make_classification(
+    return make_synthetic_classification(
         n_samples=cfg.n_samples,
         n_features=cfg.n_features,
         n_informative=cfg.n_informative,
-        n_redundant=0,
-        n_clusters_per_class=2,
         class_sep=cfg.class_sep,
         random_state=cfg.random_state,
+        test_size=cfg.test_size,
     )
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=cfg.test_size, random_state=cfg.random_state
-    )
-    return X_train, X_test, y_train, y_test
 
 
 def fit_baseline(X_train: np.ndarray, y_train: np.ndarray) -> LogisticRegression:
@@ -175,7 +171,6 @@ def plot_feature_importance(model: XGBClassifier, out_dir: Path) -> None:
     importance = model.get_booster().get_score(importance_type="gain")
     if not importance:
         return
-    # importance is a dict like {"f0": gain, ...}
     items = sorted(importance.items(), key=lambda kv: kv[1], reverse=True)
     labels = [k for k, _ in items]
     values = [v for _, v in items]
@@ -236,11 +231,9 @@ def main() -> None:
     lr = fit_baseline(X_train, y_train)
     xgb = fit_xgb(cfg, X_train, y_train, X_test, y_test)
 
-    # Probabilities for metrics/curves
     lr_prob = lr.predict_proba(X_test)[:, 1]
     xgb_prob = xgb.predict_proba(X_test)[:, 1]
 
-    # Simple accuracy for sanity
     lr_acc = accuracy_score(y_test, (lr_prob >= 0.5).astype(int))
     xgb_acc = accuracy_score(y_test, (xgb_prob >= 0.5).astype(int))
 
@@ -254,7 +247,6 @@ def main() -> None:
     plot_feature_importance(xgb, out_dir)
 
     print(f"Saved visuals to: {out_dir}")
-    print("BB-8 reports gains are nominal, Master Lonn.")
 
 
 if __name__ == "__main__":

@@ -1,46 +1,44 @@
-## XGBoost PoC — A Jedi Padawan’s Field Guide
+## XGBoost PoC — Practical Guide
 
-Welcome, Padawan. Under the watchful eye of Master Jedi Lonn (and a beeping BB‑8), you’ll learn the ways of gradient boosting until XGBoost bends to your will. May your AUC be high and your overfitting low.
+This repository provides a structured, script-based proof of concept to explain how XGBoost works. It focuses on building intuition first and then validating with metrics, visualizations, and explainability.
 
 ---
 
 ## TL;DR
 
-- Build a hands-on, story-driven PoC that explains how XGBoost works.
-- Start with intuition (residuals as “errors the next tree must fix”), then code.
-- Visualize trees, training dynamics, and feature effects with SHAP.
-- Compare baselines, tune hyperparameters, and show common pitfalls.
-- Deliver script-based demos (no notebooks required), a clean CLI, and reproducible runs.
+- Script-based, step-by-step demos for gradient boosting and XGBoost.
+- Visualize training dynamics and feature effects (SHAP optional extra).
+- Compare baselines, tune key hyperparameters, and avoid common pitfalls.
+- Reproducible runs and simple CLI-style arguments.
 
 ---
 
 ## Objectives
 
-- Explain gradient boosting and decision trees in clear, visual, bite-sized steps.
-- Show exactly how XGBoost trains: residuals, learning rate, depth, regularization.
-- Build intuition using tiny synthetic datasets before scaling up.
-- Provide practical recipes: classification, regression, imbalanced classes, missing data.
-- Make it delightful and ADHD-friendly: short modules, visual feedback, interactive sliders.
+- Explain gradient boosting and decision trees with clear visuals and small datasets.
+- Show how XGBoost learns: residuals, learning rate, depth, regularization.
+- Provide practical patterns: classification, regression, imbalanced classes, missing data.
+- Keep modules short, focused, and easy to run from the command line.
 
 ---
 
-## Proposed Repo Structure
+## Repository Structure
 
 ```
 .
 ├─ data/                         # Small sample datasets (downloaded/created by scripts)
-├─ scripts/                      # Script-based, heavily commented "notebooks"
+├─ scripts/                      # Script-based, heavily commented demos
 │  ├─ 01_intuition_boosting.py
 │  ├─ 02_xgb_basic_classification.py
-│  ├─ 03_xgb_explainability_shap.py
-│  ├─ 04_xgb_regularization_tuning.py
-│  ├─ 05_xgb_advanced_topics.py
+│  ├─ 03_xgb_explainability_shap.py          # (added when SHAP is installed)
+│  ├─ 04_xgb_regularization_tuning.py        # (planned)
+│  ├─ 05_xgb_advanced_topics.py              # (planned)
 │  └─ 99_playground.py
 ├─ src/
 │  ├─ data.py                    # dataset loaders, synthetic generators
 │  ├─ train.py                   # train/eval utilities, early stopping
 │  ├─ explain.py                 # SHAP, feature importance, partial dependence
-│  └─ cli.py                     # simple CLI wrapper
+│  └─ cli.py                     # simple CLI wrapper (planned)
 ├─ scripts_util/                 # optional helpers used by scripts
 │  └─ plotting.py
 ├─ pyproject.toml                # managed by uv
@@ -53,113 +51,90 @@ Welcome, Padawan. Under the watchful eye of Master Jedi Lonn (and a beeping BB�
 ## Datasets
 
 - Titanic (classification): familiar, small, easy to explain.
-- California Housing (regression): continuous target, nice for SHAP plots.
-- Credit Default / Fraud (classification, imbalanced): demonstrate scale_pos_weight.
-- Synthetic moons/blobs/regression: perfect for visualizing decision boundaries and residuals.
+- California Housing (regression): continuous target, useful for SHAP plots.
+- Credit Default / Fraud (classification, imbalanced): demonstrate class weighting.
+- Synthetic moons/blobs/regression: visualize decision boundaries and residuals.
 
 ---
 
 ## Environment Setup (uv)
 
-First, install `uv` (fast Python package manager):
+Install `uv` (see `https://docs.astral.sh/uv/` for options). On macOS/Linux:
 
 ```bash
-# macOS/Linux
 curl -LsSf https://astral.sh/uv/install.sh | sh
-# then restart your shell or source your profile as prompted
 ```
 
-Project setup using `uv` and `pyproject.toml`:
+Create and install core dependencies:
 
 ```bash
-# Create a virtual environment (optional; uv can also run without activation)
 uv venv -p 3.11 .venv
-
-# Install project dependencies from pyproject.toml
 uv sync
+```
 
-# Option A: activate the venv
-source .venv/bin/activate
+Install SHAP extras (optional, for explainability script):
 
-# Option B: run without activating
+```bash
+uv sync -E explain
+```
+
+Run scripts without activating the venv:
+
+```bash
 uv run python --version
 ```
 
-Running scripts:
+---
+
+## Running the Demos
 
 ```bash
-# Intuition demo
-uv run python scripts/01_intuition_boosting.py
-# Classification baseline vs XGBoost
-uv run python scripts/02_xgb_basic_classification.py
-# SHAP explainability
-uv run python scripts/03_xgb_explainability_shap.py
+# Intuition: manual residual fitting with decision stumps (regression)
+uv run python scripts/01_intuition_boosting.py --n-samples 400 --n-rounds 30 --learning-rate 0.2
+
+# Baseline vs XGBoost (classification) with metrics and plots
+uv run python scripts/02_xgb_basic_classification.py --n-samples 4000 --max-depth 4 --n-estimators 400
+
+# SHAP explainability (install extras first: uv sync -E explain)
+uv run python scripts/03_xgb_explainability_shap.py --n-samples 4000 --top-k 6
 ```
 
-Managing deps:
-
-```bash
-# Add a new dependency (writes to pyproject.toml)
-uv add lightgbm
-# Add a dev-only dependency
-uv add --dev ruff
-```
+Outputs are written under `runs/<timestamp>/<demo>/`.
 
 ---
 
-## High-Level Plan (Milestones)
+## High-Level Plan
 
-### 1) Intuition: Trees, Residuals, and Boosting (script: scripts/01_intuition_boosting.py)
+1. Intuition: Trees, residuals, and boosting (`scripts/01_intuition_boosting.py`)
 
-- Build a tiny synthetic dataset.
-- Fit a decision stump; plot decision regions.
-- Compute residuals; fit the next stump to fix the errors.
-- Repeat a few rounds; visualize how ensemble improves.
-- Add simple CLI args for num_rounds and learning_rate.
+- Fit decision stumps on residuals; visualize progressive improvement.
+- Control rounds and learning rate via CLI.
 
-### 2) Baseline vs XGBoost (script: scripts/02_xgb_basic_classification.py)
+2. Baseline vs XGBoost (`scripts/02_xgb_basic_classification.py`)
 
-- Baseline models: logistic regression, single DecisionTree.
-- Train XGBoost classifier with early stopping.
-- Show metrics: accuracy, ROC AUC, PR AUC; plot curves and calibration.
-- Print a compact tree dump to see splits, gains, and cover.
+- Compare Logistic Regression vs XGBoost.
+- Metrics: accuracy, ROC AUC, PR AUC; calibration; feature importance.
 
-### 3) Explainability with SHAP (script: scripts/03_xgb_explainability_shap.py)
+3. Explainability with SHAP (`scripts/03_xgb_explainability_shap.py`)
 
-- Global: SHAP summary beeswarm; feature importance comparison.
-- Local: force plots for individual predictions (saved as images).
-- Partial dependence / ICE for key features.
-- Discuss trust: “why did this predict positive?” vs aggregates.
+- Global: SHAP summary/bar; Local: example explanation; Dependence plots.
 
-### 4) Regularization and Tuning (script: scripts/04_xgb_regularization_tuning.py)
+4. Regularization and tuning (`scripts/04_xgb_regularization_tuning.py`)
 
-- Demonstrate overfitting by intentionally cranking depth/rounds.
-- Introduce eta, max_depth, min_child_weight, subsample, colsample_bytree, reg_alpha/lambda.
-- Simple grid/random search + early stopping; compare via a compact table.
-- Save training/validation curves and discuss bias-variance tradeoff.
+- Demonstrate overfitting; explore `eta`, `max_depth`, `min_child_weight`, `subsample`, `colsample_bytree`, `reg_alpha`, `reg_lambda`.
+- Early stopping and compact comparison tables.
 
-### 5) Advanced Topics (script: scripts/05_xgb_advanced_topics.py)
+5. Advanced topics (`scripts/05_xgb_advanced_topics.py`)
 
-- Missing values handling (XGBoost’s default direction).
-- Imbalanced classes: scale_pos_weight, eval metrics beyond accuracy.
-- Monotonic constraints (business logic imbued into the force).
-- GPU training (if available) and training speed notes.
-- Custom objectives/metrics: when and why to consider.
+- Missing values handling; imbalanced classes (`scale_pos_weight`); monotonic constraints; GPU training; custom objectives.
 
-### 6) CLI + Reproducibility (src/ + scripts/)
+6. CLI + reproducibility (`src/`)
 
-- Simple `src/cli.py` to run training from the command line with JSON/YAML config.
-- Save model, metrics, and plots into `runs/<timestamp>/`.
-- `Makefile` shortcuts: `make data`, `make train`, `make explain`, `make demos` (via uv run).
-
-### 7) Final Story and Slides
-
-- A short slide deck that mirrors the narrative and includes key visuals.
-- A 2–3 minute video/GIF capturing the demos and SHAP visuals.
+- `src/cli.py` to run training with config files; save models, metrics, and plots under `runs/`.
 
 ---
 
-## Quickstart: Minimal Example
+## Minimal Example
 
 ```python
 from xgboost import XGBClassifier
@@ -182,11 +157,7 @@ model = XGBClassifier(
     tree_method="hist"
 )
 
-model.fit(
-    X_train, y_train,
-    eval_set=[(X_val, y_val)],
-    verbose=False,
-)
+model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
 
 proba = model.predict_proba(X_val)[:, 1]
 print("AUC:", roc_auc_score(y_val, proba))
@@ -194,60 +165,17 @@ print("AUC:", roc_auc_score(y_val, proba))
 
 ---
 
-## Makefile Targets (planned)
-
-```Makefile
-# Install/refresh environment
-sync:
-	uv sync
-
-# Run demos
-intuition:
-	uv run python scripts/01_intuition_boosting.py
-
-classify:
-	uv run python scripts/02_xgb_basic_classification.py
-
-explain:
-	uv run python scripts/03_xgb_explainability_shap.py
-```
-
----
-
 ## Success Criteria
 
-- Short, visual scripts that make boosting “click.”
-- Reproducible training with saved models, metrics, and plots.
-- Clear evidence of: baseline → boosted improvement; tuning → better generalization.
-- Trust via SHAP and simple narratives that stakeholders can repeat.
+- Short, visual scripts that clarify gradient boosting and XGBoost.
+- Reproducible runs with saved models, metrics, and plots.
+- Clear improvements vs baselines and evidence of effective tuning.
+- Explainability artifacts for global and local understanding.
 
 ---
 
 ## Risks and Pitfalls
 
-- Overfitting demos may confuse without clear validation plots.
-- SHAP on very large datasets can be slow; sample appropriately.
-- Too many knobs can overwhelm; use sane defaults and progressive disclosure.
-
----
-
-## Roadmap Checklist
-
-- [ ] Create `pyproject.toml` and initialize uv environment
-- [ ] Implement `scripts/fetch_data.py` and `scripts/make_synthetic.py`
-- [ ] 01: Intuition script with residual visuals
-- [ ] 02: Baseline vs XGBoost script with metrics and curves
-- [ ] 03: SHAP global/local explainability script
-- [ ] 04: Regularization/tuning script with compact comparison table
-- [ ] 05: Advanced topics (missing, imbalance, monotonic, GPU) script
-- [ ] CLI training pipeline with saved runs
-- [ ] Slides + short demo video/GIF
-
----
-
-## Credits
-
-- Master Jedi Lonn for ancient gradient-boosting wisdom. BB‑8 for beeps of moral support.
-- XGBoost: Chen & Guestrin (KDD’16) and the XGBoost maintainers.
-
-May the gradient be with you.
+- Overfitting demonstrations require clear validation plots.
+- SHAP can be slow on large datasets; use sampling.
+- Too many hyperparameters can overwhelm; keep defaults sensible.
