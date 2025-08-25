@@ -55,7 +55,7 @@ COMMANDS: List[Dict[str, Any]] = [
             ("--subsample", float, 0.9),
             ("--colsample-bytree", float, 0.9),
             ("--reg-lambda", float, 1.0),
-            # output_dir is handled by the runner
+            ("--output-dir", Path, "runs"),
         ],
     },
     {
@@ -195,9 +195,6 @@ def run_callable(script: str, args: argparse.Namespace, overrides: Dict[str, Any
         if dest in config_fields:
             cfg_data[dest] = value
     cfg_data.update(overrides)
-
-    # Add output_dir to config, which is managed by the CLI
-    cfg_data["output_dir"] = Path("runs")
 
     try:
         config = mod.Config(**cfg_data)
