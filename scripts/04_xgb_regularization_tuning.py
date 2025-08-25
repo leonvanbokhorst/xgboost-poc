@@ -26,6 +26,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
 
+import sys
+from pathlib import Path as _Path
+sys.path.append(str(_Path(__file__).resolve().parents[1]))
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -37,6 +41,8 @@ import xgboost as xgb
 from xgboost.callback import EarlyStopping
 from itertools import product
 from typing import Optional
+from src.utils import ensure_timestamped_dir
+from src.plotting import plot_auc_curves
 
 
 @dataclass
@@ -362,7 +368,7 @@ def parse_args() -> Config:
 
 def main() -> None:
     cfg = parse_args()
-    out_dir = ensure_output_dir(cfg.output_dir)
+    out_dir = ensure_timestamped_dir(cfg.output_dir, "tuning")
 
     X_train, X_valid, y_train, y_valid = make_data(cfg)
 
@@ -400,7 +406,7 @@ def main() -> None:
         callbacks=[EarlyStopping(rounds=cfg.early_stopping_rounds, save_best=True, data_name="valid", metric_name="auc")],
         verbose_eval=False,
     )
-    plot_curves(evals_result, title="Best model: training vs validation AUC", out_path=out_dir / "best_curves.png")
+    plot_auc_curves(evals_result, title="Best model: training vs validation AUC", out_path=out_dir / "best_curves.png")
 
     print(f"Saved tuning artifacts to: {out_dir}")
 

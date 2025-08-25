@@ -26,6 +26,10 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+import sys
+from pathlib import Path as _Path
+sys.path.append(str(_Path(__file__).resolve().parents[1]))
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -35,6 +39,7 @@ import shap
 from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
+from src.utils import ensure_timestamped_dir
 
 
 @dataclass
@@ -236,7 +241,7 @@ def parse_args() -> Config:
 
 def main() -> None:
     cfg = parse_args()
-    out_dir = ensure_output_dir(cfg.output_dir)
+    out_dir = ensure_timestamped_dir(cfg.output_dir, "explainability")
 
     X_train, X_val, X_test, y_train, y_val, y_test, feature_names = make_data(cfg)
     model = train_xgb(cfg, X_train, y_train, X_val, y_val)

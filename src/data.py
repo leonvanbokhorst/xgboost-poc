@@ -27,6 +27,34 @@ def make_synthetic_classification(
     return train_test_split(X, y, test_size=test_size, random_state=random_state)
 
 
+def make_train_val_test_classification(
+    n_samples: int,
+    n_features: int,
+    n_informative: int,
+    class_sep: float,
+    random_state: int,
+    holdout: float = 0.2,
+):
+    from sklearn.model_selection import train_test_split
+
+    X, y = make_classification(
+        n_samples=n_samples,
+        n_features=n_features,
+        n_informative=n_informative,
+        n_redundant=0,
+        n_clusters_per_class=2,
+        class_sep=class_sep,
+        random_state=random_state,
+    )
+    X_train, X_temp, y_train, y_temp = train_test_split(
+        X, y, test_size=holdout, random_state=random_state
+    )
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=0.5, random_state=random_state
+    )
+    return X_train, X_val, X_test, y_train, y_val, y_test
+
+
 def make_sine_regression(
     n_samples: int,
     noise_std: float,
