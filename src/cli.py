@@ -134,13 +134,20 @@ def build_flags(arg_specs: List[Tuple[str, type, Any, Any | None]], args: argpar
 
 
 def run_python(script: str, extra_args: list[str]) -> int:
-    script_path = SCRIPTS / script
-    if not script_path.exists():
+    scripts_root = SCRIPTS.resolve()
+    script_path = (SCRIPTS / script).resolve()
+    # Ensure the resolved script stays within the scripts directory and exists
+    try:
+        script_path.relative_to(scripts_root)
+    except ValueError:
+        print(f"Refusing to execute script outside scripts/: {script_path}", file=sys.stderr)
+        return 2
+    if not script_path.exists() or not script_path.is_file():
         print(f"Unknown or missing script: {script}", file=sys.stderr)
         return 2
     cmd = [sys.executable, str(script_path), *extra_args]
     try:
-        subprocess.run(cmd, check=True)
+        subprocess.run(cmd, check=True, shell=False)
         return 0
     except subprocess.CalledProcessError as e:
         return e.returncode
@@ -169,7 +176,8 @@ def main() -> int:
                 p.add_argument(flag, type=ftype, **kwargs)
         p.set_defaults(script=cmd_meta["script"], arg_specs=normalized)
 
-    args, extra = parser.parse_known_args()
+    # Disallow unknown extra args to avoid forwarding arbitrary parameters
+    args = parser.parse_args()
 
     overrides: Dict[str, Any] = {}
     if args.config:
@@ -178,7 +186,7 @@ def main() -> int:
         overrides = {k.replace("-", "_"): v for k, v in cfg_yaml.get(args.cmd, {}).items()}
 
     flags = build_flags(args.arg_specs, args, overrides)
-    return run_python(args.script, flags + extra)
+    return run_python(args.script, flags)
 
 
 if __name__ == "__main__":
