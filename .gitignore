@@ -2,5 +2,6 @@
 .venv/
 .DS_Store
 runs/
+data/
 __pycache__/
 *.png
