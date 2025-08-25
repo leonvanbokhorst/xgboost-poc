@@ -37,6 +37,7 @@ from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
 
 from src.utils import ensure_timestamped_dir
+from argparse import BooleanOptionalAction
 
 
 @dataclass
@@ -148,7 +149,7 @@ def parse_args() -> Config:
     p.add_argument("--missing-rate", type=float, default=0.05)
     p.add_argument("--pos-weight", type=float, default=1.0)
     p.add_argument("--monotone", type=int, default=1)
-    p.add_argument("--use-gpu", type=lambda s: s.lower() in {"1","true","yes"}, default=False)
+    p.add_argument("--use-gpu", action=BooleanOptionalAction, default=False)
     p.add_argument("--random-state", type=int, default=42)
     p.add_argument("--output-dir", type=Path, default=Path("runs"))
     a = p.parse_args()
@@ -160,7 +161,7 @@ def parse_args() -> Config:
         missing_rate=a.missing_rate,
         pos_weight=a.pos_weight,
         monotone=a.monotone,
-        use_gpu=bool(a.use_gpu),
+        use_gpu=a.use_gpu,
         random_state=a.random_state,
         output_dir=a.output_dir,
     )

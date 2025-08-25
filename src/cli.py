@@ -41,7 +41,7 @@ COMMANDS: List[Dict[str, Any]] = [
         "script": "02_xgb_basic_classification.py",
         "help": "Run baseline vs XGBoost classification demo",
         "args": [
-            ("--n-samples", int, 3000),  # override COMMON default
+            ("--n-samples", int, 3000),
             *CLASSIF_COMMON,
             ("--test-size", float, 0.2),
             ("--random-state", int, 42),
@@ -97,13 +97,40 @@ COMMANDS: List[Dict[str, Any]] = [
             ("--missing-rate", float, 0.05),
             ("--pos-weight", float, 1.0),
             ("--monotone", int, 1),
-            # Example boolean flag support if scripts accept store_true in future:
-            # ("--use-gpu", bool, False, "store_true"),
             ("--use-gpu", str, "false"),
             ("--random-state", int, 42),
         ],
     },
 ]
+
+
+def normalize(cmd_meta: Dict[str, Any]) -> List[Tuple[str, type, Any, Any | None]]:
+    normalized: List[Tuple[str, type, Any, Any | None]] = []
+    for spec in cmd_meta["args"]:
+        flag, ftype, default, *rest = spec
+        action = rest[0] if rest else None
+        normalized.append((flag, ftype, default, action))
+    return normalized
+
+
+def build_flags(arg_specs: List[Tuple[str, type, Any, Any | None]], args: argparse.Namespace, overrides: Dict[str, Any]) -> List[str]:
+    flags: List[str] = []
+    for flag, ftype, default, action in arg_specs:
+        dest = flag.lstrip("-").replace("-", "_")
+        val = overrides.get(dest, getattr(args, dest))
+        if action == "store_true":
+            if val:
+                flags.append(flag)
+            continue
+        if action == "store_false":
+            if not val:
+                flags.append(flag)
+            continue
+        if ftype is bool:
+            flags += [flag, "true" if val else "false"]
+            continue
+        flags += [flag, str(val)]
+    return flags
 
 
 def run_python(script: str, extra_args: list[str]) -> int:
@@ -133,59 +160,24 @@ def main() -> int:
             help=cmd_meta["help"],
             formatter_class=argparse.ArgumentDefaultsHelpFormatter,
         )
-        arg_specs: List[Tuple[str, type, Any]] = []
-        for spec in cmd_meta["args"]:
-            # Support (flag, type, default[, action])
-            if len(spec) == 4:
-                flag, ftype, default, action = spec
-                dest = flag.lstrip("-").replace("-", "_")
-                p.add_argument(flag, dest=dest, default=default, action=action)
-                arg_specs.append((flag, ftype, default, action))
+        normalized = normalize(cmd_meta)
+        for flag, ftype, default, action in normalized:
+            kwargs = dict(dest=flag.lstrip("-").replace("-", "_"), default=default)
+            if action:
+                p.add_argument(flag, action=action, **kwargs)
             else:
-                flag, ftype, default = spec
-                dest = flag.lstrip("-").replace("-", "_")
-                p.add_argument(flag, dest=dest, type=ftype, default=default)
-                arg_specs.append((flag, ftype, default))
-        p.set_defaults(script=cmd_meta["script"], arg_specs=arg_specs)
+                p.add_argument(flag, type=ftype, **kwargs)
+        p.set_defaults(script=cmd_meta["script"], arg_specs=normalized)
 
     args, extra = parser.parse_known_args()
 
-    # Load config if provided and override args
     overrides: Dict[str, Any] = {}
     if args.config:
         with open(args.config, "r") as f:
             cfg_yaml = yaml.safe_load(f) or {}
-        overrides = {k.replace("_", "-"): v for k, v in cfg_yaml.get(args.cmd, {}).items()}
+        overrides = {k.replace("-", "_"): v for k, v in cfg_yaml.get(args.cmd, {}).items()}
 
-    # Reconstruct flags/values in declared order with type/action awareness
-    flags: list[str] = []
-    for spec in args.arg_specs:
-        if len(spec) == 4:
-            flag, ftype, default, action = spec
-            dest = flag.lstrip("-").replace("-", "_")
-            val = overrides.get(flag.lstrip("-"), getattr(args, dest))
-            # store_true-style flags: include flag if True
-            if action == "store_true":
-                if bool(val):
-                    flags.append(flag)
-                continue
-            # store_false similar (not used currently)
-            if action == "store_false":
-                if not bool(val):
-                    flags.append(flag)
-                continue
-            # Fallback, include value
-            flags += [flag, str(val)]
-        else:
-            flag, ftype, default = spec
-            dest = flag.lstrip("-").replace("-", "_")
-            val = overrides.get(flag.lstrip("-"), getattr(args, dest))
-            # If target type is bool in future, map to true/false string
-            if ftype is bool:
-                flags += [flag, "true" if bool(val) else "false"]
-            else:
-                flags += [flag, str(val)]
-
+    flags = build_flags(args.arg_specs, args, overrides)
     return run_python(args.script, flags + extra)
 
 

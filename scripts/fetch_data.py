@@ -17,7 +17,13 @@ import seaborn as sns
 
 
 def save_titanic(out_dir: Path) -> Path:
-    df = sns.load_dataset("titanic")
+    try:
+        df = sns.load_dataset("titanic")
+    except Exception as e:
+        print(f"Error loading Titanic dataset: {e}")
+        raise RuntimeError(
+            "Failed to load Titanic dataset. Please check your network connection or seaborn installation."
+        ) from e
     out = out_dir / "titanic.csv"
     df.to_csv(out, index=False)
     return out
@@ -37,7 +43,12 @@ def main() -> None:
     p.add_argument("--out-dir", type=Path, default=Path("data"))
     a = p.parse_args()
 
-    a.out_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        a.out_dir.mkdir(parents=True, exist_ok=True)
+    except Exception as e:
+        print(f"Error creating output directory {a.out_dir}: {e}")
+        raise SystemExit(1)
+
     paths = [
         save_titanic(a.out_dir),
         save_california_housing(a.out_dir),
