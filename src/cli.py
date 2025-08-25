@@ -4,135 +4,112 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from typing import List, Dict, Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 
+# Data-driven command definitions
+COMMANDS: List[Dict[str, Any]] = [
+    {
+        "name": "intuition",
+        "script": "01_intuition_boosting.py",
+        "help": "Run residual-fitting intuition demo",
+        "args": [
+            ("--n-samples", int, 300),
+            ("--noise-std", float, 0.2),
+            ("--n-rounds", int, 20),
+            ("--learning-rate", float, 0.1),
+            ("--max-depth", int, 1),
+            ("--random-state", int, 42),
+        ],
+    },
+    {
+        "name": "classify",
+        "script": "02_xgb_basic_classification.py",
+        "help": "Run baseline vs XGBoost classification demo",
+        "args": [
+            ("--n-samples", int, 3000),
+            ("--n-features", int, 12),
+            ("--n-informative", int, 6),
+            ("--class-sep", float, 1.2),
+            ("--test-size", float, 0.2),
+            ("--random-state", int, 42),
+            ("--max-depth", int, 3),
+            ("--n-estimators", int, 300),
+            ("--learning-rate", float, 0.05),
+            ("--subsample", float, 0.9),
+            ("--colsample-bytree", float, 0.9),
+            ("--reg-lambda", float, 1.0),
+        ],
+    },
+    {
+        "name": "explain",
+        "script": "03_xgb_explainability_shap.py",
+        "help": "Run SHAP explainability demo",
+        "args": [
+            ("--n-samples", int, 4000),
+            ("--n-features", int, 12),
+            ("--n-informative", int, 6),
+            ("--class-sep", float, 1.2),
+            ("--random-state", int, 42),
+            ("--max-depth", int, 3),
+            ("--n-estimators", int, 300),
+            ("--learning-rate", float, 0.05),
+            ("--subsample", float, 0.9),
+            ("--colsample-bytree", float, 0.9),
+            ("--reg-lambda", float, 1.0),
+            ("--top-k", int, 6),
+            ("--instance-idx", int, 0),
+        ],
+    },
+    {
+        "name": "tune",
+        "script": "04_xgb_regularization_tuning.py",
+        "help": "Run regularization and tuning demo",
+        "args": [
+            ("--n-samples", int, 6000),
+            ("--n-features", int, 20),
+            ("--n-informative", int, 8),
+            ("--class-sep", float, 1.0),
+            ("--random-state", int, 42),
+            ("--early-stopping-rounds", int, 30),
+        ],
+    },
+]
+
 
 def run_python(script: str, extra_args: list[str]) -> int:
     cmd = [sys.executable, str(SCRIPTS / script), *extra_args]
-    return subprocess.call(cmd)
+    # Use run with check=True to surface failures and proper exit codes
+    completed = subprocess.run(cmd, check=False)
+    return completed.returncode
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="XGBoost PoC CLI")
-    sub = parser.add_subparsers(dest="cmd", required=True)
+    subparsers = parser.add_subparsers(dest="cmd", required=True)
 
-    p1 = sub.add_parser("intuition", help="Run residual-fitting intuition demo")
-    p1.add_argument("--n-samples", type=int, default=300)
-    p1.add_argument("--noise-std", type=float, default=0.2)
-    p1.add_argument("--n-rounds", type=int, default=20)
-    p1.add_argument("--learning-rate", type=float, default=0.1)
-    p1.add_argument("--max-depth", type=int, default=1)
-    p1.add_argument("--random-state", type=int, default=42)
-
-    p2 = sub.add_parser("classify", help="Run baseline vs XGBoost classification demo")
-    p2.add_argument("--n-samples", type=int, default=3000)
-    p2.add_argument("--n-features", type=int, default=12)
-    p2.add_argument("--n-informative", type=int, default=6)
-    p2.add_argument("--class-sep", type=float, default=1.2)
-    p2.add_argument("--test-size", type=float, default=0.2)
-    p2.add_argument("--random-state", type=int, default=42)
-    p2.add_argument("--max-depth", type=int, default=3)
-    p2.add_argument("--n-estimators", type=int, default=300)
-    p2.add_argument("--learning-rate", type=float, default=0.05)
-    p2.add_argument("--subsample", type=float, default=0.9)
-    p2.add_argument("--colsample-bytree", type=float, default=0.9)
-    p2.add_argument("--reg-lambda", type=float, default=1.0)
-
-    p3 = sub.add_parser("explain", help="Run SHAP explainability demo")
-    p3.add_argument("--n-samples", type=int, default=4000)
-    p3.add_argument("--n-features", type=int, default=12)
-    p3.add_argument("--n-informative", type=int, default=6)
-    p3.add_argument("--class-sep", type=float, default=1.2)
-    p3.add_argument("--random-state", type=int, default=42)
-    p3.add_argument("--max-depth", type=int, default=3)
-    p3.add_argument("--n-estimators", type=int, default=300)
-    p3.add_argument("--learning-rate", type=float, default=0.05)
-    p3.add_argument("--subsample", type=float, default=0.9)
-    p3.add_argument("--colsample-bytree", type=float, default=0.9)
-    p3.add_argument("--reg-lambda", type=float, default=1.0)
-    p3.add_argument("--top-k", type=int, default=6)
-    p3.add_argument("--instance-idx", type=int, default=0)
-
-    p4 = sub.add_parser("tune", help="Run regularization and tuning demo")
-    p4.add_argument("--n-samples", type=int, default=6000)
-    p4.add_argument("--n-features", type=int, default=20)
-    p4.add_argument("--n-informative", type=int, default=8)
-    p4.add_argument("--class-sep", type=float, default=1.0)
-    p4.add_argument("--random-state", type=int, default=42)
-    p4.add_argument("--early-stopping-rounds", type=int, default=30)
+    # Register subcommands from COMMANDS
+    for cmd_meta in COMMANDS:
+        p = subparsers.add_parser(cmd_meta["name"], help=cmd_meta["help"])
+        arg_flags: List[str] = []
+        for flag, ftype, default in cmd_meta["args"]:
+            dest = flag.lstrip("-").replace("-", "_")
+            p.add_argument(flag, dest=dest, type=ftype, default=default)
+            arg_flags.append(flag)
+        p.set_defaults(script=cmd_meta["script"], arg_flags=arg_flags)
 
     args, extra = parser.parse_known_args()
 
-    if args.cmd == "intuition":
-        return run_python(
-            "01_intuition_boosting.py",
-            [
-                "--n-samples", str(args.n_samples),
-                "--noise-std", str(args.noise_std),
-                "--n-rounds", str(args.n_rounds),
-                "--learning-rate", str(args.learning_rate),
-                "--max-depth", str(args.max_depth),
-                "--random-state", str(args.random_state),
-            ] + extra,
-        )
+    # Reconstruct flags/values in declared order
+    flags: list[str] = []
+    for flag in args.arg_flags:
+        dest = flag.lstrip("-").replace("-", "_")
+        flags += [flag, str(getattr(args, dest))]
 
-    if args.cmd == "classify":
-        return run_python(
-            "02_xgb_basic_classification.py",
-            [
-                "--n-samples", str(args.n_samples),
-                "--n-features", str(args.n_features),
-                "--n-informative", str(args.n_informative),
-                "--class-sep", str(args.class_sep),
-                "--test-size", str(args.test_size),
-                "--random-state", str(args.random_state),
-                "--max-depth", str(args.max_depth),
-                "--n-estimators", str(args.n_estimators),
-                "--learning-rate", str(args.learning_rate),
-                "--subsample", str(args.subsample),
-                "--colsample-bytree", str(args.colsample_bytree),
-                "--reg-lambda", str(args.reg_lambda),
-            ] + extra,
-        )
-
-    if args.cmd == "explain":
-        return run_python(
-            "03_xgb_explainability_shap.py",
-            [
-                "--n-samples", str(args.n_samples),
-                "--n-features", str(args.n_features),
-                "--n-informative", str(args.n_informative),
-                "--class-sep", str(args.class_sep),
-                "--random-state", str(args.random_state),
-                "--max-depth", str(args.max_depth),
-                "--n-estimators", str(args.n_estimators),
-                "--learning-rate", str(args.learning_rate),
-                "--subsample", str(args.subsample),
-                "--colsample-bytree", str(args.colsample_bytree),
-                "--reg-lambda", str(args.reg_lambda),
-                "--top-k", str(args.top_k),
-                "--instance-idx", str(args.instance_idx),
-            ] + extra,
-        )
-
-    if args.cmd == "tune":
-        return run_python(
-            "04_xgb_regularization_tuning.py",
-            [
-                "--n-samples", str(args.n_samples),
-                "--n-features", str(args.n_features),
-                "--n-informative", str(args.n_informative),
-                "--class-sep", str(args.class_sep),
-                "--random-state", str(args.random_state),
-                "--early-stopping-rounds", str(args.early_stopping_rounds),
-            ] + extra,
-        )
-
-    parser.error("Unknown command")
-    return 2
+    return run_python(args.script, flags + extra)
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    sys.exit(main())
