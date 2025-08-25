@@ -49,7 +49,9 @@ def shap_dependence(
     out_dir: Path,
 ) -> None:
     mean_abs = np.mean(np.abs(shap_values), axis=0)
-    top_idx = np.argsort(mean_abs)[::-1][:top_k]
+    n_features = len(feature_names)
+    k = max(0, min(top_k, n_features))
+    top_idx = np.argsort(mean_abs)[::-1][:k]
 
     for idx in top_idx:
         shap.dependence_plot(
@@ -74,9 +76,9 @@ def shap_local_waterfall(
     instance_idx: int,
     out_dir: Path,
 ) -> None:
-    if instance_idx < 0 or instance_idx >= len(X):
-        raise IndexError(f"instance-idx {instance_idx} out of bounds for test set size {len(X)}")
     idx = int(instance_idx)
+    if idx < 0 or idx >= len(X):
+        raise IndexError(f"instance-idx {instance_idx} out of bounds for test set size {len(X)}")
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[idx],
