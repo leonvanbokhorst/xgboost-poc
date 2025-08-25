@@ -2,7 +2,7 @@
 name = "xgboost-poc"
 version = "0.1.0"
 description = "Engaging PoC explaining the workings of XGBoost via script-based demos"
-authors = [{ name = "Lonn" }]
+authors = [{ name = "Master Lonn" }]
 requires-python = ">=3.10"
 readme = "README.md"
 license = { text = "MIT" }
