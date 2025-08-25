@@ -30,17 +30,13 @@ This repository provides a structured, script-based proof of concept to explain 
 ├─ scripts/                      # Script-based, heavily commented demos
 │  ├─ 01_intuition_boosting.py
 │  ├─ 02_xgb_basic_classification.py
-│  ├─ 03_xgb_explainability_shap.py          # (added when SHAP is installed)
-│  ├─ 04_xgb_regularization_tuning.py        # (planned)
-│  ├─ 05_xgb_advanced_topics.py              # (planned)
+│  ├─ 03_xgb_explainability_shap.py
+│  ├─ 04_xgb_regularization_tuning.py
 │  └─ 99_playground.py
 ├─ src/
 │  ├─ data.py                    # dataset loaders, synthetic generators
-│  ├─ train.py                   # train/eval utilities, early stopping
-│  ├─ explain.py                 # SHAP, feature importance, partial dependence
-│  └─ cli.py                     # simple CLI wrapper (planned)
-├─ scripts_util/                 # optional helpers used by scripts
-│  └─ plotting.py
+│  ├─ plotting.py                # shared plotting helpers
+│  └─ utils.py                   # timestamped dirs, grid helpers
 ├─ pyproject.toml                # managed by uv
 ├─ Makefile                      # optional shortcuts (uv run ...)
 └─ README.md
@@ -75,7 +71,7 @@ uv sync
 Install SHAP extras (optional, for explainability script):
 
 ```bash
-uv sync -E explain
+uv sync --extra explain
 ```
 
 Run scripts without activating the venv:
@@ -95,8 +91,38 @@ uv run python scripts/01_intuition_boosting.py --n-samples 400 --n-rounds 30 --l
 # Baseline vs XGBoost (classification) with metrics and plots
 uv run python scripts/02_xgb_basic_classification.py --n-samples 4000 --max-depth 4 --n-estimators 400
 
-# SHAP explainability (install extras first: uv sync -E explain)
+# SHAP explainability (install extras first: uv sync --extra explain)
 uv run python scripts/03_xgb_explainability_shap.py --n-samples 4000 --top-k 6
+
+# Regularization and tuning (overfitting demo + early-stopping grid)
+uv run python scripts/04_xgb_regularization_tuning.py
+```
+
+Or via the simple CLI:
+
+```bash
+# Intuition
+uv run python -m src.cli intuition --n-samples 400 --n-rounds 30 --learning-rate 0.2
+# Classification
+uv run python -m src.cli classify --n-samples 4000 --max-depth 4 --n-estimators 400
+# Explainability
+uv run python -m src.cli explain --n-samples 4000 --top-k 6
+# Tuning
+uv run python -m src.cli tune
+# Advanced topics
+uv run python -m src.cli advanced --n-samples 4000 --pos-weight 3.0 --use-gpu false
+```
+
+Makefile shortcuts:
+
+```bash
+make sync
+make intuition
+make classify
+make explain
+make tune
+make advanced
+make clean-runs
 ```
 
 Outputs are written under `runs/<timestamp>/<demo>/`.
@@ -124,13 +150,13 @@ Outputs are written under `runs/<timestamp>/<demo>/`.
 - Demonstrate overfitting; explore `eta`, `max_depth`, `min_child_weight`, `subsample`, `colsample_bytree`, `reg_alpha`, `reg_lambda`.
 - Early stopping and compact comparison tables.
 
-5. Advanced topics (`scripts/05_xgb_advanced_topics.py`)
+5. Advanced topics (`scripts/05_xgb_advanced_topics.py`) — planned
 
 - Missing values handling; imbalanced classes (`scale_pos_weight`); monotonic constraints; GPU training; custom objectives.
 
-6. CLI + reproducibility (`src/`)
+6. CLI + reproducibility (`src/cli.py`) — planned
 
-- `src/cli.py` to run training with config files; save models, metrics, and plots under `runs/`.
+- Orchestrate training with config files; save models, metrics, and plots under `runs/`.
 
 ---
 

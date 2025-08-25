@@ -43,6 +43,10 @@ from itertools import product
 from typing import Optional
 from src.utils import ensure_timestamped_dir
 from src.plotting import plot_auc_curves
+from src.utils import random_sample_grid, cartesian_product
+from sklearn.model_selection import ParameterGrid, ParameterSampler
+import logging
+import sys
 
 
 @dataclass
@@ -190,31 +194,12 @@ def get_best_iter(booster: xgb.Booster, evals_result: Dict[str, Dict[str, List[f
     return fb
 
 
-def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid) -> Tuple[List[Result], Result]:
+def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid, combos: List[Dict]) -> Tuple[List[Result], Result]:
     results: List[Result] = []
     best: Result | None = None
 
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dvalid = xgb.DMatrix(X_valid, label=y_valid)
-
-    param_names = [
-        "n_estimators",
-        "max_depth",
-        "learning_rate",
-        "min_child_weight",
-        "subsample",
-        "colsample_bytree",
-        "reg_lambda",
-    ]
-    grids = [
-        cfg.tune_n_estimators,
-        cfg.tune_max_depth,
-        cfg.tune_learning_rate,
-        cfg.tune_min_child_weight,
-        cfg.tune_subsample,
-        cfg.tune_colsample_bytree,
-        cfg.tune_reg_lambda,
-    ]
 
     base_params = {
         "objective": "binary:logistic",
@@ -223,8 +208,22 @@ def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid) -> Tuple[List[R
         "verbosity": 0,
     }
 
-    for combo in product(*grids):
-        values = dict(zip(param_names, combo))
+    for combo in combos:
+        # combos from ParameterGrid/ParameterSampler are dicts already.
+        if isinstance(combo, dict):
+            values = combo
+        else:
+            # Fallback: if provided as sequence, map by expected order
+            param_names = [
+                "n_estimators",
+                "max_depth",
+                "learning_rate",
+                "min_child_weight",
+                "subsample",
+                "colsample_bytree",
+                "reg_lambda",
+            ]
+            values = dict(zip(param_names, combo))
         params = {
             **base_params,
             "max_depth": values["max_depth"],
@@ -279,10 +278,10 @@ def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid) -> Tuple[List[R
             best = res
 
     if best is None:
-        raise ValueError(
-            "No valid model was found during grid search. "
-            "Check your hyperparameter ranges and data for issues."
+        logging.error(
+            "No valid model was found during grid search. Check hyperparameter ranges and data."
         )
+        sys.exit(1)
     return results, best
 
 
@@ -334,6 +333,7 @@ def parse_args() -> Config:
     p.add_argument("--overfit-learning-rate", type=float, default=0.2)
 
     p.add_argument("--early-stopping-rounds", type=int, default=30)
+    p.add_argument("--random-search", type=int, default=0, help="Sample this many random combos from the grid (0 = full grid)")
 
     p.add_argument("--output-dir", type=Path, default=Path("runs"))
 
@@ -351,6 +351,7 @@ def parse_args() -> Config:
         overfit_learning_rate=a.overfit_learning_rate,
         tree_method="hist",
         early_stopping_rounds=a.early_stopping_rounds,
+        # use random_search as a count; 0 means full grid
         output_dir=a.output_dir,
     )
 
@@ -375,8 +376,24 @@ def main() -> None:
     # 1) Overfitting demonstration
     train_overfit(cfg, X_train, y_train, X_valid, y_valid, out_dir)
 
-    # 2) Tuning with early stopping
-    results, best = grid_search(cfg, X_train, y_train, X_valid, y_valid)
+    # 2) Tuning with early stopping (optionally randomized)
+    param_grid = {
+        "n_estimators": cfg.tune_n_estimators,
+        "max_depth": cfg.tune_max_depth,
+        "learning_rate": cfg.tune_learning_rate,
+        "min_child_weight": cfg.tune_min_child_weight,
+        "subsample": cfg.tune_subsample,
+        "colsample_bytree": cfg.tune_colsample_bytree,
+        "reg_lambda": cfg.tune_reg_lambda,
+    }
+    combos = (
+        list(ParameterSampler(param_grid, n_iter=cfg.random_search, random_state=cfg.random_state))
+        if getattr(cfg, "random_search", 0)
+        else list(ParameterGrid(param_grid))
+    )
+
+    results, best = grid_search(cfg, X_train, y_train, X_valid, y_valid, combos)
+
     write_results_csv(results, out_dir / "tuning_results.csv")
 
     # 3) Train best config again to export curves

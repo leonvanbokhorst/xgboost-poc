@@ -1,0 +1,13 @@
+classify:
+  n-samples: 2500
+  n-features: 12
+  n-informative: 6
+  class-sep: 1.1
+  test-size: 0.25
+  random-state: 123
+  max-depth: 4
+  n-estimators: 350
+  learning-rate: 0.05
+  subsample: 0.9
+  colsample-bytree: 0.9
+  reg-lambda: 1.0
