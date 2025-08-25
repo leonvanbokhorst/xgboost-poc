@@ -246,7 +246,8 @@ def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid) -> Tuple[List[R
                                 if best is None or res.valid_auc > best.valid_auc:
                                     best = res
 
-    assert best is not None
+    if best is None:
+        raise ValueError("No best model found in grid search.")
     return results, best
 
 

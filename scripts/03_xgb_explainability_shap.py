@@ -21,6 +21,7 @@ Note: requires installing the optional extras group: `uv sync --extra explain`.
 from __future__ import annotations
 
 import argparse
+import warnings
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -107,6 +108,12 @@ def compute_shap(model: XGBClassifier, X_train: np.ndarray, X_test: np.ndarray):
     # For binary classification, shap_values is array of shape (n_samples, n_features)
     # Ensure we handle potential list output format from older versions
     if isinstance(shap_values, list):
+        if len(shap_values) > 1:
+            warnings.warn(
+                f"Detected multi-class SHAP output (len={len(shap_values)}). "
+                "This script expects binary classification. Please check your model and data.",
+                RuntimeWarning,
+            )
         shap_values = shap_values[0]
     expected_value = explainer.expected_value
     if isinstance(expected_value, (list, tuple)):
@@ -160,7 +167,11 @@ def plot_local(
     instance_idx: int,
     out_dir: Path,
 ) -> None:
-    idx = int(np.clip(instance_idx, 0, len(X_test) - 1))
+    if instance_idx < 0 or instance_idx >= len(X_test):
+        raise IndexError(
+            f"instance-idx {instance_idx} out of bounds for test set size {len(X_test)}"
+        )
+    idx = int(instance_idx)
     shap.waterfall_plot(
         shap.Explanation(
             values=shap_values[idx],
