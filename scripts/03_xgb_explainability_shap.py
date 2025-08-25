@@ -77,14 +77,18 @@ def make_data(cfg: Config):
         class_sep=cfg.class_sep,
         random_state=cfg.random_state,
     )
-    X_train, X_test, y_train, y_test = train_test_split(
+    # Split train/val/test to avoid leakage
+    X_train, X_temp, y_train, y_temp = train_test_split(
         X, y, test_size=cfg.test_size, random_state=cfg.random_state
     )
+    X_val, X_test, y_val, y_test = train_test_split(
+        X_temp, y_temp, test_size=0.5, random_state=cfg.random_state
+    )
     feature_names = [f"f{i}" for i in range(cfg.n_features)]
-    return X_train, X_test, y_train, y_test, feature_names
+    return X_train, X_val, X_test, y_train, y_val, y_test, feature_names
 
 
-def train_xgb(cfg: Config, X_train: np.ndarray, y_train: np.ndarray, X_test: np.ndarray, y_test: np.ndarray) -> XGBClassifier:
+def train_xgb(cfg: Config, X_train: np.ndarray, y_train: np.ndarray, X_val: np.ndarray, y_val: np.ndarray) -> XGBClassifier:
     model = XGBClassifier(
         n_estimators=cfg.n_estimators,
         max_depth=cfg.max_depth,
@@ -97,7 +101,7 @@ def train_xgb(cfg: Config, X_train: np.ndarray, y_train: np.ndarray, X_test: np.
         tree_method=cfg.tree_method,
         random_state=cfg.random_state,
     )
-    model.fit(X_train, y_train, eval_set=[(X_test, y_test)], verbose=False)
+    model.fit(X_train, y_train, eval_set=[(X_val, y_val)], verbose=False)
     return model
 
 
@@ -234,8 +238,8 @@ def main() -> None:
     cfg = parse_args()
     out_dir = ensure_output_dir(cfg.output_dir)
 
-    X_train, X_test, y_train, y_test, feature_names = make_data(cfg)
-    model = train_xgb(cfg, X_train, y_train, X_test, y_test)
+    X_train, X_val, X_test, y_train, y_val, y_test, feature_names = make_data(cfg)
+    model = train_xgb(cfg, X_train, y_train, X_val, y_val)
 
     explainer, shap_values, expected_value = compute_shap(model, X_train, X_test)
 

@@ -27,9 +27,16 @@ def cartesian_product(grid: Dict[str, Sequence]) -> List[Dict[str, object]]:
 def random_sample_grid(
     grid: Dict[str, Sequence],
     num_samples: int,
-    rng: random.Random | None = None,
+    rng: random.Random,
 ) -> List[Dict[str, object]]:
-    rng = rng or random.Random()
+    """
+    Randomly sample parameter combinations from a grid.
+
+    Args:
+        grid: Mapping from parameter name to a sequence of possible values.
+        num_samples: Number of combinations to sample.
+        rng: A seeded random.Random instance for reproducibility.
+    """
     combos = cartesian_product(grid)
     if num_samples >= len(combos):
         return combos

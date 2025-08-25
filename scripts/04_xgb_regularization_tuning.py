@@ -35,6 +35,8 @@ from sklearn.datasets import make_classification
 from sklearn.model_selection import train_test_split
 import xgboost as xgb
 from xgboost.callback import EarlyStopping
+from itertools import product
+from typing import Optional
 
 
 @dataclass
@@ -163,13 +165,23 @@ def train_overfit(cfg: Config, X_train, y_train, X_valid, y_valid, out_dir: Path
     )
 
 
-def find_best_iteration_from_history(evals_result: Dict[str, Dict[str, List[float]]]) -> int:
+def find_best_iteration_from_history(evals_result: Dict[str, Dict[str, List[float]]]) -> Optional[int]:
     valid_auc_series = evals_result.get("valid", {}).get("auc", [])
     if not valid_auc_series:
         valid_auc_series = evals_result.get("validation_1", {}).get("auc", [])
     if not valid_auc_series:
-        return 0
+        return None
     return int(np.argmax(valid_auc_series))
+
+
+def get_best_iter(booster: xgb.Booster, evals_result: Dict[str, Dict[str, List[float]]]) -> int:
+    bi = getattr(booster, "best_iteration", None)
+    if bi is not None:
+        return int(bi)
+    fb = find_best_iteration_from_history(evals_result)
+    if fb is None:
+        raise ValueError("Could not determine best iteration from evaluation history.")
+    return fb
 
 
 def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid) -> Tuple[List[Result], Result]:
@@ -179,75 +191,92 @@ def grid_search(cfg: Config, X_train, y_train, X_valid, y_valid) -> Tuple[List[R
     dtrain = xgb.DMatrix(X_train, label=y_train)
     dvalid = xgb.DMatrix(X_valid, label=y_valid)
 
-    for n_estimators in cfg.tune_n_estimators:
-        for max_depth in cfg.tune_max_depth:
-            for learning_rate in cfg.tune_learning_rate:
-                for min_child_weight in cfg.tune_min_child_weight:
-                    for subsample in cfg.tune_subsample:
-                        for colsample_bytree in cfg.tune_colsample_bytree:
-                            for reg_lambda in cfg.tune_reg_lambda:
-                                params = {
-                                    "objective": "binary:logistic",
-                                    "eval_metric": "auc",
-                                    "max_depth": max_depth,
-                                    "eta": learning_rate,
-                                    "min_child_weight": min_child_weight,
-                                    "subsample": subsample,
-                                    "colsample_bytree": colsample_bytree,
-                                    "lambda": reg_lambda,
-                                    "tree_method": cfg.tree_method,
-                                    "verbosity": 0,
-                                }
+    param_names = [
+        "n_estimators",
+        "max_depth",
+        "learning_rate",
+        "min_child_weight",
+        "subsample",
+        "colsample_bytree",
+        "reg_lambda",
+    ]
+    grids = [
+        cfg.tune_n_estimators,
+        cfg.tune_max_depth,
+        cfg.tune_learning_rate,
+        cfg.tune_min_child_weight,
+        cfg.tune_subsample,
+        cfg.tune_colsample_bytree,
+        cfg.tune_reg_lambda,
+    ]
 
-                                evals_result: Dict[str, Dict[str, List[float]]] = {}
-                                booster = xgb.train(
-                                    params,
-                                    dtrain,
-                                    num_boost_round=n_estimators,
-                                    evals=[(dtrain, "train"), (dvalid, "valid")],
-                                    evals_result=evals_result,
-                                    callbacks=[
-                                        EarlyStopping(
-                                            rounds=cfg.early_stopping_rounds,
-                                            save_best=True,
-                                            data_name="valid",
-                                            metric_name="auc",
-                                        )
-                                    ],
-                                    verbose_eval=False,
-                                )
+    base_params = {
+        "objective": "binary:logistic",
+        "eval_metric": "auc",
+        "tree_method": cfg.tree_method,
+        "verbosity": 0,
+    }
 
-                                train_auc_series = evals_result.get("train", {}).get("auc", [])
-                                valid_auc_series = evals_result.get("valid", {}).get("auc", [])
-                                if not valid_auc_series:
-                                    continue
+    for combo in product(*grids):
+        values = dict(zip(param_names, combo))
+        params = {
+            **base_params,
+            "max_depth": values["max_depth"],
+            "eta": values["learning_rate"],
+            "min_child_weight": values["min_child_weight"],
+            "subsample": values["subsample"],
+            "colsample_bytree": values["colsample_bytree"],
+            "lambda": values["reg_lambda"],
+        }
 
-                                best_iter_attr = getattr(booster, "best_iteration", None)
-                                if best_iter_attr is None:
-                                    best_iter = find_best_iteration_from_history(evals_result)
-                                else:
-                                    best_iter = int(best_iter_attr)
+        evals_result: Dict[str, Dict[str, List[float]]] = {}
+        booster = xgb.train(
+            params,
+            dtrain,
+            num_boost_round=values["n_estimators"],
+            evals=[(dtrain, "train"), (dvalid, "valid")],
+            evals_result=evals_result,
+            callbacks=[
+                EarlyStopping(
+                    rounds=cfg.early_stopping_rounds,
+                    save_best=True,
+                    data_name="valid",
+                    metric_name="auc",
+                )
+            ],
+            verbose_eval=False,
+        )
 
-                                res = Result(
-                                    params={
-                                        "n_estimators": n_estimators,
-                                        "max_depth": max_depth,
-                                        "learning_rate": learning_rate,
-                                        "min_child_weight": min_child_weight,
-                                        "subsample": subsample,
-                                        "colsample_bytree": colsample_bytree,
-                                        "reg_lambda": reg_lambda,
-                                    },
-                                    best_iteration=best_iter,
-                                    train_auc=float(train_auc_series[best_iter]) if train_auc_series else float("nan"),
-                                    valid_auc=float(valid_auc_series[best_iter]),
-                                )
-                                results.append(res)
-                                if best is None or res.valid_auc > best.valid_auc:
-                                    best = res
+        train_auc_series = evals_result.get("train", {}).get("auc", [])
+        valid_auc_series = evals_result.get("valid", {}).get("auc", [])
+        if not valid_auc_series:
+            continue
+
+        best_iter = get_best_iter(booster, evals_result)
+
+        res = Result(
+            params={
+                "n_estimators": values["n_estimators"],
+                "max_depth": values["max_depth"],
+                "learning_rate": values["learning_rate"],
+                "min_child_weight": values["min_child_weight"],
+                "subsample": values["subsample"],
+                "colsample_bytree": values["colsample_bytree"],
+                "reg_lambda": values["reg_lambda"],
+            },
+            best_iteration=best_iter,
+            train_auc=float(train_auc_series[best_iter]) if train_auc_series else float("nan"),
+            valid_auc=float(valid_auc_series[best_iter]),
+        )
+        results.append(res)
+        if best is None or res.valid_auc > best.valid_auc:
+            best = res
 
     if best is None:
-        raise ValueError("No best model found in grid search.")
+        raise ValueError(
+            "No valid model was found during grid search. "
+            "Check your hyperparameter ranges and data for issues."
+        )
     return results, best
 
 
