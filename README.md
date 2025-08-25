@@ -205,3 +205,137 @@ print("AUC:", roc_auc_score(y_val, proba))
 - Overfitting demonstrations require clear validation plots.
 - SHAP can be slow on large datasets; use sampling.
 - Too many hyperparameters can overwhelm; keep defaults sensible.
+
+---
+
+## Learning Guide: Script-by-Script Explanations
+
+### 1) 01_intuition_boosting.py — Residual Fitting Intuition (Regression)
+
+- Purpose: Build mental model of gradient boosting as iterative error-correction.
+- Core idea: Each new shallow tree fits current residuals; learning_rate controls how much we trust each correction.
+- What it does:
+  - Generates y = sin(x) + noise; trains depth-1 trees iteratively.
+  - Visualizes prediction curves at several rounds and residual plots.
+- What to look for:
+  - Early rounds quickly reduce large errors; later rounds make smaller refinements.
+  - Too many rounds or large learning_rate can start chasing noise.
+- Key parameters:
+  - n_rounds: more trees → more capacity; combine with small learning_rate.
+  - learning_rate (eta): shrinkage; lower values need more rounds but generalize better.
+  - max_depth: use 1 (stumps) for pure intuition; higher depth increases local fit.
+- Pitfalls:
+  - Overfitting with high depth/rounds and no validation.
+  - Misinterpreting residuals: they should shrink towards zero over rounds.
+- Exercises:
+  - Compare learning_rate = 0.3 vs 0.05 at fixed n_rounds; inspect residual plots.
+  - Increase noise_std and observe how predictions behave.
+
+### 2) 02_xgb_basic_classification.py — Baseline vs XGBoost (Classification)
+
+- Purpose: Show practical gains over simple baselines and how to evaluate them.
+- What it does:
+  - Compares Logistic Regression and XGBoost on synthetic classification.
+  - Saves ROC, PR, calibration plots and feature importance (gain).
+- What to look for:
+  - ROC AUC vs PR AUC: PR is more sensitive in class-imbalanced settings.
+  - Calibration: boosted models can be overconfident; consider calibration for production.
+  - Feature importance: sanity-check top features match how data was generated.
+- Key parameters:
+  - max_depth, n_estimators, learning_rate: main capacity/speed knobs.
+  - subsample, colsample_bytree: stochasticity that regularizes and speeds up.
+  - tree_method: use "hist" for fast CPU training.
+- Pitfalls:
+  - Comparing only accuracy; prefer ROC AUC/PR AUC.
+  - Reading feature importance as causality; it’s association within the learned model.
+- Exercises:
+  - Lower class_sep and compare baseline vs XGB gaps.
+  - Change subsample/colsample_bytree to see stability-speed tradeoffs.
+
+### 3) 03_xgb_explainability_shap.py — Global and Local Explainability (SHAP)
+
+- Purpose: Build trust by explaining predictions globally (which features matter) and locally (why this prediction?).
+- What it does:
+  - Trains with proper train/val split; computes TreeSHAP on test data.
+  - Saves SHAP summary (beeswarm + bar), dependence plots (top_k), and a local waterfall.
+- What to look for:
+  - Beeswarm: spread (impact) and color (feature value) patterns; interactions show as color gradients.
+  - Dependence plots: monotonic or non-linear relationships; interaction hints via color.
+  - Local waterfall: how base value + contributions sum to the prediction.
+- Key parameters:
+  - top_k: pick a small number to focus on clearest signals.
+  - instance_idx: probe different examples (typical vs edge cases).
+- Pitfalls:
+  - Running SHAP on huge test sets; prefer sampling.
+  - Multi-class SHAP: ensure the class dimension is handled correctly.
+- Exercises:
+  - Compare summaries on different random_state; does feature ranking remain stable?
+  - Choose instances near the decision boundary for local plots.
+
+### 4) 04_xgb_regularization_tuning.py — Overfitting, Early Stopping, Tuning
+
+- Purpose: Demonstrate overfitting, then tune regularization to improve generalization.
+- What it does:
+  - Overfit demo: deep trees with many rounds; saves train vs valid AUC curves.
+  - Grid/random search with early stopping; saves results CSV and curves for best model.
+- What to look for:
+  - Divergence of train vs valid curves in overfit settings.
+  - Early stopping stabilizes valid metrics; best_iteration marks the sweet spot.
+- Key parameters (regularization):
+  - learning_rate (eta), max_depth, min_child_weight, subsample, colsample_bytree, reg_lambda.
+  - early_stopping_rounds: patience; avoid setting too low.
+  - random_search: sample N combos quickly for a fast sweep.
+- Pitfalls:
+  - Comparing models at different boosting rounds without early stopping is misleading.
+  - Too small learning_rate without enough n_estimators underfits.
+- Exercises:
+  - Run tune with random_search=5 then =20; compare best valid AUC.
+  - Vary min_child_weight and subsample together; inspect stability.
+
+### 5) 05_xgb_advanced_topics.py — Missing, Imbalance, Monotonic, (Optional) GPU
+
+- Purpose: Cover common production realities and constraints.
+- What it does:
+  - Introduces missing values; XGBoost routes NaNs via learned default directions.
+  - Handles class imbalance via scale_pos_weight and evaluates with PR curves.
+  - Enforces monotonic constraints (e.g., feature 0 increasing shouldn’t decrease risk).
+  - Optional GPU via device="cuda" (requires CUDA-enabled environment).
+- What to look for:
+  - Precision-Recall improvement when using appropriate pos_weight.
+  - Monotonic dependence curve: predicted probability should be non-decreasing/non-increasing per constraint.
+- Key parameters:
+  - pos_weight ≈ (negatives/positives) as a first heuristic.
+  - monotone constraints vector; start small (one feature) and validate behavior.
+  - use-gpu: true/false depending on environment.
+- Pitfalls:
+  - Overusing pos_weight can hurt calibration; verify PR and calibration.
+  - Monotonic constraints can reduce accuracy if incorrectly specified.
+- Exercises:
+  - Sweep pos_weight from 1 to 10 and plot AP vs pos_weight.
+  - Apply a negative monotone constraint and verify the direction in dependence plot.
+
+---
+
+## Study Tips and Mental Models
+
+- Gradient boosting = repeated residual fixing: start simple, add nuance.
+- Depth controls local expressiveness; learning_rate controls step size.
+- Early stopping is your friend: compare at best_iteration, not at fixed n_estimators.
+- Trust but verify with explainability: global patterns + local checks.
+- Prefer PR AUC when positives are rare; use calibration when probabilities matter.
+
+## Suggested Learning Path
+
+1. Run intuition (01) to lock the mental model.
+2. Compare baseline vs XGB (02) and learn the metrics.
+3. Explain your model (03) to connect features with outcomes.
+4. Tune (04) with early stopping; understand trade-offs.
+5. Explore advanced constraints and imbalance (05).
+
+## Quick Commands
+
+- Intuition: `make intuition`
+- Classification: `make classify`
+- Explainability (requires extras): `make explain`
+- Tuning: `make tune`
+- Advanced topics: `make advanced`
