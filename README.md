@@ -98,6 +98,19 @@ uv run python scripts/03_xgb_explainability_shap.py --n-samples 4000 --top-k 6
 uv run python scripts/04_xgb_regularization_tuning.py
 ```
 
+Or via the simple CLI:
+
+```bash
+# Intuition
+uv run python -m src.cli intuition --n-samples 400 --n-rounds 30 --learning-rate 0.2
+# Classification
+uv run python -m src.cli classify --n-samples 4000 --max-depth 4 --n-estimators 400
+# Explainability
+uv run python -m src.cli explain --n-samples 4000 --top-k 6
+# Tuning
+uv run python -m src.cli tune
+```
+
 Outputs are written under `runs/<timestamp>/<demo>/`.
 
 ---
