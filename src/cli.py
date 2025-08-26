@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import importlib
+import inspect
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
-import yaml
+from typing import Any, Dict, List, Tuple
+
 import runpy
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
@@ -40,6 +43,7 @@ COMMANDS: List[Dict[str, Any]] = [
         "name": "classify",
         "script": "02_xgb_basic_classification.py",
         "help": "Run baseline vs XGBoost classification demo",
+        "runner": "callable",  # Use the direct runner for this script
         "args": [
             ("--n-samples", int, 3000),
             *CLASSIF_COMMON,
@@ -51,6 +55,7 @@ COMMANDS: List[Dict[str, Any]] = [
             ("--subsample", float, 0.9),
             ("--colsample-bytree", float, 0.9),
             ("--reg-lambda", float, 1.0),
+            ("--output-dir", Path, "runs"),
         ],
     },
     {
@@ -162,6 +167,44 @@ def run_python(script: str, extra_args: list[str]) -> int:
         sys.argv = old_argv
 
 
+def run_callable(script: str, args: argparse.Namespace, overrides: Dict[str, Any]) -> int:
+    """
+    Run a script by importing it and calling its `main(cfg)` function.
+
+    This runner assumes the target script has:
+    - A `Config` dataclass defining its parameters.
+    - A `main(cfg: Config)` function to execute the logic.
+    """
+    module_name = f"scripts.{script.replace('.py', '')}"
+    try:
+        mod = importlib.import_module(module_name)
+    except ImportError as e:
+        print(f"Failed to import script '{module_name}': {e}", file=sys.stderr)
+        return 1
+
+    if not hasattr(mod, "main") or not hasattr(mod, "Config"):
+        print(f"Script '{module_name}' missing required `main` or `Config`", file=sys.stderr)
+        return 1
+
+    # Collect all config fields from the dataclass definition
+    config_fields = mod.Config.__dataclass_fields__.keys()
+
+    # Build config, starting with defaults, then applying CLI args, then YAML overrides
+    cfg_data = {}
+    for dest, value in vars(args).items():
+        if dest in config_fields:
+            cfg_data[dest] = value
+    cfg_data.update(overrides)
+
+    try:
+        config = mod.Config(**cfg_data)
+        mod.main(config)
+        return 0
+    except Exception as e:
+        print(f"Error running script '{module_name}': {e}", file=sys.stderr)
+        return 1
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="XGBoost PoC CLI",
@@ -183,7 +226,12 @@ def main() -> int:
                 p.add_argument(flag, action=action, **kwargs)
             else:
                 p.add_argument(flag, type=ftype, **kwargs)
-        p.set_defaults(script=cmd_meta["script"], arg_specs=normalized)
+        # Attach metadata to the parser object for later retrieval
+        p.set_defaults(
+            script=cmd_meta["script"],
+            arg_specs=normalized,
+            runner=cmd_meta.get("runner", "runpy"),
+        )
 
     # Disallow unknown extra args to avoid forwarding arbitrary parameters
     args = parser.parse_args()
@@ -194,8 +242,14 @@ def main() -> int:
             cfg_yaml = yaml.safe_load(f) or {}
         overrides = {k.replace("-", "_"): v for k, v in cfg_yaml.get(args.cmd, {}).items()}
 
-    flags = build_flags(args.arg_specs, args, overrides)
-    return run_python(args.script, flags)
+    # Decide which runner to use based on the command's configuration
+    if getattr(args, "runner", "runpy") == "callable":
+        # The new direct-callable runner
+        return run_callable(args.script, args, overrides)
+    else:
+        # The legacy runpy runner
+        flags = build_flags(args.arg_specs, args, overrides)
+        return run_python(args.script, flags)
 
 
 if __name__ == "__main__":
